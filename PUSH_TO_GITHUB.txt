@@ -1,0 +1,79 @@
+# Push to GitHub - Quick Setup Script
+
+This script will help you push your Money Manager project to GitHub in just a few steps.
+
+## What to do:
+
+### Step 1: Create a GitHub Repository
+1. Go to https://github.com/new
+2. Enter repository name: `money-manager-martingale`
+3. Add description: "💰 Money Management App with percentage-based Martingale trading strategy"
+4. Choose Public or Private
+5. **DO NOT** check "Initialize with README"
+6. Click "Create repository"
+
+### Step 2: Copy Your Repository URL
+After creating the repo on GitHub, you'll see a URL like:
+```
+https://github.com/YOUR_USERNAME/money-manager-martingale.git
+```
+
+Copy this URL.
+
+### Step 3: Run These Commands
+Open PowerShell in the project folder and paste these commands (replace the URL with yours):
+
+```powershell
+cd "C:\Users\Madhusudhan\Documents\money management app"
+
+# Add GitHub as remote (replace URL)
+git remote add origin https://github.com/YOUR_USERNAME/money-manager-martingale.git
+
+# Push to GitHub
+git push -u origin main
+```
+
+### Step 4: Enter GitHub Credentials
+- If asked for credentials, enter your GitHub username and password/token
+- If 2FA enabled, use a Personal Access Token (generate at https://github.com/settings/tokens)
+
+## Done! 🎉
+
+Your project will now be on GitHub. Share the link with others!
+
+---
+
+## If You Already Have an Existing GitHub Repo:
+
+To push to an **existing** repository instead:
+
+```powershell
+git remote add origin https://github.com/YOUR_USERNAME/EXISTING_REPO.git
+git push -u origin main
+```
+
+Or if the remote already exists:
+
+```powershell
+git remote set-url origin https://github.com/YOUR_USERNAME/your-repo.git
+git push -u origin main
+```
+
+## Useful Git Commands:
+
+```powershell
+# Check remote URLs
+git remote -v
+
+# View local commits not yet pushed
+git log origin/main..HEAD
+
+# View git status
+git status
+
+# Make a new commit after changes
+git add .
+git commit -m "Your commit message"
+git push origin main
+```
+
