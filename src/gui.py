@@ -1,14 +1,24 @@
 """Beautiful Tkinter GUI for the Money Management App (percentage-based Martingale).
 
 Run with:
-  python -m src.gui_new
+  python -m src.gui
 
-Modern dark theme with enhanced UI/UX.
+Modern dark theme with enhanced UI/UX, status messages (no popups), and Excel export.
 """
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 import tkinter.font as tkFont
 from money_manager.session import Account
+import os
+from pathlib import Path
+
+# Try to import openpyxl for Excel export
+try:
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    HAS_OPENPYXL = True
+except ImportError:
+    HAS_OPENPYXL = False
 
 # Color scheme (modern dark theme)
 DARK_BG = "#1e1e1e"
@@ -17,13 +27,15 @@ SECONDARY_COLOR = "#3498db"  # Blue
 ACCENT_COLOR = "#e74c3c"  # Red (for losses)
 TEXT_COLOR = "#ecf0f1"  # Light gray
 HEADER_BG = "#2c3e50"  # Dark blue-gray
+SUCCESS_COLOR = "#27ae60"  # Darker green
+WARNING_COLOR = "#e67e22"  # Orange
 
 
 class MoneyApp(tk.Tk):
     def __init__(self, data_file=None):
         super().__init__()
         self.title("💰 Money Manager - Martingale Trading")
-        self.geometry("950x750")
+        self.geometry("950x800")
         self.configure(bg=DARK_BG)
         self.resizable(True, True)
 
@@ -38,6 +50,7 @@ class MoneyApp(tk.Tk):
         style.configure('Treeview.Heading', background=HEADER_BG, foreground=TEXT_COLOR)
 
         self.account = Account(data_file=data_file)
+        self.excel_file = os.path.join(os.path.dirname(data_file) if data_file else os.getcwd(), "trading_history.xlsx")
 
         # Main container
         main_container = tk.Frame(self, bg=DARK_BG)
@@ -47,6 +60,14 @@ class MoneyApp(tk.Tk):
         title_font = tkFont.Font(family="Segoe UI", size=18, weight="bold")
         title = tk.Label(main_container, text="💰 Money Manager", font=title_font, bg=DARK_BG, fg=PRIMARY_COLOR)
         title.pack(anchor=tk.W, pady=(0, 16))
+
+        # Status bar (replaces popups)
+        status_frame = tk.Frame(main_container, bg=HEADER_BG, relief=tk.FLAT, bd=1, height=30)
+        status_frame.pack(fill=tk.X, pady=(0, 12))
+        status_frame.pack_propagate(False)
+        self.status_var = tk.StringVar(value="Ready")
+        self.status_label = tk.Label(status_frame, textvariable=self.status_var, bg=HEADER_BG, fg=SUCCESS_COLOR, font=("Segoe UI", 9))
+        self.status_label.pack(anchor=tk.W, padx=12, pady=6)
 
         # Top section: Balance & Init
         top_frame = tk.Frame(main_container, bg=HEADER_BG, relief=tk.FLAT, bd=1)
@@ -96,6 +117,7 @@ class MoneyApp(tk.Tk):
         btn_row2.pack(fill=tk.X, padx=12, pady=(0, 12))
         tk.Button(btn_row2, text="✓ Record Win", command=self.on_record_win, bg=PRIMARY_COLOR, fg='black', font=("Segoe UI", 9, "bold"), relief=tk.FLAT, bd=0, padx=12, pady=6, cursor="hand2").pack(side=tk.LEFT, padx=(0, 6))
         tk.Button(btn_row2, text="✗ Record Loss", command=self.on_record_loss, bg=ACCENT_COLOR, fg='white', font=("Segoe UI", 9, "bold"), relief=tk.FLAT, bd=0, padx=12, pady=6, cursor="hand2").pack(side=tk.LEFT, padx=6)
+        tk.Button(btn_row2, text="💾 Export to Excel", command=self.export_to_excel, bg=WARNING_COLOR, fg='white', font=("Segoe UI", 9, "bold"), relief=tk.FLAT, bd=0, padx=12, pady=6, cursor="hand2").pack(side=tk.LEFT, padx=6)
 
         # Session history
         hist_label = tk.Label(main_container, text="Current Session History", font=("Segoe UI", 11, "bold"), bg=DARK_BG, fg=PRIMARY_COLOR)
@@ -124,33 +146,41 @@ class MoneyApp(tk.Tk):
 
         self.refresh()
 
+    def set_status(self, message, color=SUCCESS_COLOR):
+        """Update status bar instead of showing popups"""
+        self.status_var.set(message)
+        self.status_label.config(fg=color)
+        self.after(3000, lambda: self.status_var.set("Ready"))  # Reset after 3 seconds
+
     def on_init(self):
         try:
             val = float(self.init_entry.get())
         except Exception:
-            messagebox.showerror("Invalid", "Please enter a valid number for initial balance.")
+            self.set_status("❌ Invalid balance - enter a number", ACCENT_COLOR)
             return
         self.account.init_account(val)
         self.init_entry.delete(0, tk.END)
         self.refresh()
-        messagebox.showinfo("Success", f"Account initialized with balance: {val}")
+        self.export_to_excel()  # Auto-export after init
+        self.set_status(f"✓ Account initialized with balance: {val}", SUCCESS_COLOR)
 
     def on_start_session(self):
         try:
             sess = self.account.start_session()
-            messagebox.showinfo("Session", f"Started session at {sess.start_balance}")
+            self.set_status(f"✓ Session started at {sess.start_balance}", SUCCESS_COLOR)
         except Exception as e:
-            messagebox.showwarning("Start", str(e))
+            self.set_status(f"⚠ {str(e)}", WARNING_COLOR)
         self.refresh()
 
     def on_end_session(self):
         self.account.force_end_session()
-        messagebox.showinfo("Session", "Session ended")
+        self.set_status("✓ Session ended", SUCCESS_COLOR)
         self.refresh()
 
     def on_next_bet(self):
         info = self.account.get_next_bet(base_percent=self.base_percent_var.get(), multiplier=self.mult_var.get())
         self.next_bet_var.set(f"{info['bet_amount']:.2f} ({info['bet_percent']*100:.2f}%)")
+        self.set_status(f"Next bet: ${info['bet_amount']:.2f} ({info['bet_percent']*100:.2f}%)", SECONDARY_COLOR)
 
     def _record(self, win: bool):
         if self.account.current_session is None:
@@ -170,9 +200,11 @@ class MoneyApp(tk.Tk):
 
         try:
             step = self.account.record_result(bet_percent=bet_percent, bet_amount=bet_amount, pnl=pnl, result=("win" if win else "loss"))
-            messagebox.showinfo("Recorded", f"Step {step.idx}: {step.result} pnl={step.pnl:.2f} → {step.balance_after:.2f}")
+            result_text = "WIN ✓" if win else "LOSS ✗"
+            self.set_status(f"Step {step.idx}: {result_text} | P&L: {step.pnl:+.2f} | Balance: {step.balance_after:.2f}", SUCCESS_COLOR if win else ACCENT_COLOR)
+            self.export_to_excel()  # Auto-export after each trade
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            self.set_status(f"❌ Error: {str(e)}", ACCENT_COLOR)
 
         self.refresh()
 
@@ -181,6 +213,75 @@ class MoneyApp(tk.Tk):
 
     def on_record_loss(self):
         self._record(False)
+
+    def export_to_excel(self):
+        """Export all sessions to Excel file"""
+        if not HAS_OPENPYXL:
+            self.set_status("⚠ openpyxl not installed - install with: pip install openpyxl", WARNING_COLOR)
+            return
+
+        try:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Trading History"
+
+            # Headers
+            headers = ["Step", "Bet Amount ($)", "Bet %", "Win/Loss", "P&L ($)", "New Balance"]
+            ws.append(headers)
+
+            # Style headers
+            header_fill = PatternFill(start_color="2c3e50", end_color="2c3e50", fill_type="solid")
+            header_font = Font(bold=True, color="ecf0f1")
+            for cell in ws[1]:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            # Add all sessions data
+            row_num = 2
+            for session in self.account.sessions:
+                for step in session.steps:
+                    ws.append([
+                        step.idx,
+                        f"{step.bet_amount:.2f}",
+                        f"{step.bet_percent*100:.2f}%",
+                        step.result.upper(),
+                        f"{step.pnl:+.2f}",
+                        f"{step.balance_after:.2f}"
+                    ])
+                    # Color code rows
+                    if step.result == "win":
+                        row_fill = PatternFill(start_color="27ae60", end_color="27ae60", fill_type="solid")
+                    else:
+                        row_fill = PatternFill(start_color="c0392b", end_color="c0392b", fill_type="solid")
+                    for cell in ws[row_num]:
+                        cell.fill = row_fill
+                        cell.font = Font(color="ecf0f1")
+                        cell.alignment = Alignment(horizontal="center")
+                    row_num += 1
+
+            # Adjust column widths
+            ws.column_dimensions['A'].width = 10
+            ws.column_dimensions['B'].width = 15
+            ws.column_dimensions['C'].width = 10
+            ws.column_dimensions['D'].width = 12
+            ws.column_dimensions['E'].width = 12
+            ws.column_dimensions['F'].width = 15
+
+            # Add summary sheet
+            summary_ws = wb.create_sheet("Summary")
+            summary_ws.append(["Metric", "Value"])
+            summary_ws.append(["Starting Balance", ""])
+            summary_ws.append(["Current Balance", self.account.balance])
+            summary_ws.append(["Total Profit/Loss", self.account.balance - (self.account.sessions[0].start_balance if self.account.sessions else self.account.balance)])
+            summary_ws.append(["Total Sessions", len(self.account.sessions)])
+            summary_ws.column_dimensions['A'].width = 20
+            summary_ws.column_dimensions['B'].width = 15
+
+            wb.save(self.excel_file)
+            self.set_status(f"✓ Exported to Excel: {Path(self.excel_file).name}", SUCCESS_COLOR)
+        except Exception as e:
+            self.set_status(f"❌ Excel export failed: {str(e)}", ACCENT_COLOR)
 
     def refresh(self):
         self.balance_var.set(f"{self.account.balance:.2f}")
