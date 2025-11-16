@@ -86,7 +86,7 @@ Create a Windows installer (Inno Setup)
 2. Build the installer using the provided PowerShell helper (run from project root):
 
 ```pwsh
-cd "C:\Users\Madhusudhan\Documents\money management app"
+cd money-management-app
 \installer\build_installer.ps1
 ```
 

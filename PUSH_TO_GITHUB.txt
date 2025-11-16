@@ -24,7 +24,7 @@ Copy this URL.
 Open PowerShell in the project folder and paste these commands (replace the URL with yours):
 
 ```powershell
-cd "C:\Users\Madhusudhan\Documents\money management app"
+cd money-management-app
 
 # Add GitHub as remote (replace URL)
 git remote add origin https://github.com/YOUR_USERNAME/money-manager-martingale.git

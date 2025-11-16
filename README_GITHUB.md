@@ -21,8 +21,8 @@ A beautiful, modern GUI application for tracking daily money management using a 
 
 ### Option 1: Pre-built Executable (Windows)
 
-1. Download the latest release from [Releases](releases)
-2. Double-click `MoneyManager.exe` or use the Desktop shortcut
+1. Download the latest release from [Releases](https://github.com/michealmartinj-byte/money-management-app/releases)
+2. Double-click `MoneyManager.exe` to run
 3. Initialize your account balance and start trading
 
 ### Option 2: From Source (Python)
@@ -31,20 +31,20 @@ A beautiful, modern GUI application for tracking daily money management using a 
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/money-manager-martingale.git
-cd money-manager-martingale
+git clone https://github.com/michealmartinj-byte/money-management-app.git
+cd money-management-app
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Run the GUI
-python -m src.gui_new
+python -m src.gui
 ```
 
 ## 🚀 Quick Start
 
 ### Initialize Account
-1. Open MoneyManager GUI (or run `python -m src.gui_new`)
+1. Open MoneyManager GUI (or run `python -m src.gui`)
 2. Enter initial balance (e.g., 1000) in the "Init Balance" field
 3. Click "Initialize"
 

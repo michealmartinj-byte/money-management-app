@@ -20,8 +20,8 @@ This guide shows you how to push this project to GitHub.
 
 Open PowerShell in the project folder and run:
 
-```pwsh
-cd "C:\Users\Madhusudhan\Documents\money management app"
+```bash
+cd money-management-app
 
 # Initialize git repository
 git init
@@ -37,7 +37,7 @@ git add .
 git commit -m "Initial commit: Money Manager GUI with Martingale simulator"
 
 # Add GitHub as remote (replace USERNAME/REPO with your GitHub username and repo name)
-git remote add origin https://github.com/USERNAME/money-manager-martingale.git
+git remote add origin https://github.com/USERNAME/money-management-app.git
 
 # Push to GitHub (you'll be prompted for GitHub credentials)
 git branch -M main
