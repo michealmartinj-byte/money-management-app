@@ -120,9 +120,28 @@ class MoneyApp(tk.Tk):
 
         btn_row2 = tk.Frame(mid_frame, bg=HEADER_BG)
         btn_row2.pack(fill=tk.X, padx=12, pady=(0, 12))
+        
+        # Manual bet input section
+        tk.Label(btn_row2, text="Manual Bet:", bg=HEADER_BG, fg=TEXT_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 8))
+        self.manual_bet_entry = tk.Entry(btn_row2, width=12, bg='#3c3f41', fg=TEXT_COLOR, insertbackground=TEXT_COLOR, font=("Segoe UI", 9), relief=tk.FLAT, bd=1)
+        self.manual_bet_entry.pack(side=tk.LEFT, padx=(0, 8))
+        self.manual_bet_entry.bind('<KeyRelease>', self.on_bet_input_change)
+        
+        tk.Label(btn_row2, text="Bet %:", bg=HEADER_BG, fg=TEXT_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 8))
+        self.manual_bet_pct_entry = tk.Entry(btn_row2, width=8, bg='#3c3f41', fg=TEXT_COLOR, insertbackground=TEXT_COLOR, font=("Segoe UI", 9), relief=tk.FLAT, bd=1)
+        self.manual_bet_pct_entry.pack(side=tk.LEFT, padx=(0, 16))
+        self.manual_bet_pct_entry.bind('<KeyRelease>', self.on_bet_input_change)
+        
         tk.Button(btn_row2, text="✓ Record Win", command=self.on_record_win, bg=PRIMARY_COLOR, fg='black', font=("Segoe UI", 9, "bold"), relief=tk.FLAT, bd=0, padx=12, pady=6, cursor="hand2").pack(side=tk.LEFT, padx=(0, 6))
         tk.Button(btn_row2, text="✗ Record Loss", command=self.on_record_loss, bg=ACCENT_COLOR, fg='white', font=("Segoe UI", 9, "bold"), relief=tk.FLAT, bd=0, padx=12, pady=6, cursor="hand2").pack(side=tk.LEFT, padx=6)
         tk.Button(btn_row2, text="💾 Export to Excel", command=self.export_to_excel, bg=WARNING_COLOR, fg='white', font=("Segoe UI", 9, "bold"), relief=tk.FLAT, bd=0, padx=12, pady=6, cursor="hand2").pack(side=tk.LEFT, padx=6)
+
+        # Profit calculation display
+        profit_frame = tk.Frame(mid_frame, bg=HEADER_BG)
+        profit_frame.pack(fill=tk.X, padx=12, pady=(0, 12))
+        tk.Label(profit_frame, text="Profit Calculation:", font=("Segoe UI", 9, "bold"), bg=HEADER_BG, fg=PRIMARY_COLOR).pack(side=tk.LEFT, padx=(0, 8))
+        self.profit_calc_var = tk.StringVar(value="Enter bet amount and % to calculate profit")
+        tk.Label(profit_frame, textvariable=self.profit_calc_var, bg=HEADER_BG, fg=SECONDARY_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT)
 
         # Session history
         hist_label = tk.Label(main_container, text="Current Session History", font=("Segoe UI", 11, "bold"), bg=DARK_BG, fg=PRIMARY_COLOR)
@@ -204,6 +223,26 @@ class MoneyApp(tk.Tk):
         self.next_bet_var.set(display_text)
         self.set_status(f"Next bet: ${bet_amount:.2f} at {bet_percent*100:.2f}% of ${self.account.balance:.2f}", SECONDARY_COLOR)
 
+    def on_bet_input_change(self, event=None):
+        """Calculate profit when user enters bet amount and %"""
+        try:
+            bet_amount = float(self.manual_bet_entry.get()) if self.manual_bet_entry.get() else 0
+            bet_pct = float(self.manual_bet_pct_entry.get()) if self.manual_bet_pct_entry.get() else 0
+            
+            if bet_amount > 0 and bet_pct > 0:
+                # Profit on win = bet_amount (100% of bet)
+                # Profit % = (profit / bet_amount) * 100 = 100% for both win/loss
+                profit_win = bet_amount
+                profit_loss = -bet_amount
+                profit_pct = 100.0
+                
+                calc_text = f"Bet: ${bet_amount:.2f} ({bet_pct:.2f}%) | Win: +${profit_win:.2f} (+{profit_pct:.0f}%) | Loss: -${abs(profit_loss):.2f} (-{profit_pct:.0f}%)"
+                self.profit_calc_var.set(calc_text)
+            else:
+                self.profit_calc_var.set("Enter bet amount and % to calculate profit")
+        except ValueError:
+            self.profit_calc_var.set("Invalid input - enter numbers only")
+
     def _record(self, win: bool):
         if self.account.current_session is None:
             try:
@@ -211,9 +250,23 @@ class MoneyApp(tk.Tk):
             except Exception:
                 pass
 
-        info = self.account.get_next_bet(base_percent=self.base_percent_var.get(), multiplier=self.mult_var.get())
-        bet_percent = info["bet_percent"]
-        bet_amount = info["bet_amount"]
+        # Check if manual bet input is provided
+        try:
+            manual_bet_amt = float(self.manual_bet_entry.get()) if self.manual_bet_entry.get() else None
+            manual_bet_pct = float(self.manual_bet_pct_entry.get()) / 100 if self.manual_bet_pct_entry.get() else None
+        except ValueError:
+            self.set_status("❌ Invalid bet amount or percentage", ACCENT_COLOR)
+            return
+
+        if manual_bet_amt and manual_bet_amt > 0 and manual_bet_pct and manual_bet_pct > 0:
+            # Use manual input
+            bet_amount = manual_bet_amt
+            bet_percent = manual_bet_pct
+        else:
+            # Use auto-calculated
+            info = self.account.get_next_bet(base_percent=self.base_percent_var.get(), multiplier=self.mult_var.get())
+            bet_percent = info["bet_percent"]
+            bet_amount = info["bet_amount"]
 
         if win:
             pnl = float(bet_amount)
@@ -226,6 +279,10 @@ class MoneyApp(tk.Tk):
             # Show detailed calculation: base balance → bet calculation → profit/loss → new balance
             self.set_status(f"Step {step.idx}: {result_text} | Bet: ${bet_amount:.2f} ({bet_percent*100:.2f}%) | P&L: {step.pnl:+.2f} | Balance: ${step.balance_after:.2f}", SUCCESS_COLOR if win else ACCENT_COLOR)
             self.export_to_excel()  # Auto-export after each trade
+            # Clear manual input after recording
+            self.manual_bet_entry.delete(0, tk.END)
+            self.manual_bet_pct_entry.delete(0, tk.END)
+            self.profit_calc_var.set("Enter bet amount and % to calculate profit")
         except Exception as e:
             self.set_status(f"❌ Error: {str(e)}", ACCENT_COLOR)
 
