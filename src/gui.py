@@ -109,9 +109,14 @@ class MoneyApp(tk.Tk):
         tk.Label(bet_row, text="Multiplier:", bg=HEADER_BG, fg=TEXT_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT)
         self.mult_var = tk.DoubleVar(value=2.0)
         tk.Entry(bet_row, textvariable=self.mult_var, width=6, bg='#3c3f41', fg=TEXT_COLOR, insertbackground=TEXT_COLOR, font=("Segoe UI", 9), relief=tk.FLAT, bd=1).pack(side=tk.LEFT, padx=(4, 16))
-        tk.Button(bet_row, text="📊 Next Bet", command=self.on_next_bet, bg=SECONDARY_COLOR, fg='white', font=("Segoe UI", 9, "bold"), relief=tk.FLAT, bd=0, padx=12, pady=4, cursor="hand2").pack(side=tk.LEFT, padx=(0, 8))
+        tk.Button(bet_row, text="📊 Calculate", command=self.on_next_bet, bg=SECONDARY_COLOR, fg='white', font=("Segoe UI", 9, "bold"), relief=tk.FLAT, bd=0, padx=12, pady=4, cursor="hand2").pack(side=tk.LEFT)
+
+        # Next bet info display
+        calc_frame = tk.Frame(mid_frame, bg=HEADER_BG)
+        calc_frame.pack(fill=tk.X, padx=12, pady=(0, 8))
+        tk.Label(calc_frame, text="Next Bet:", font=("Segoe UI", 9, "bold"), bg=HEADER_BG, fg=PRIMARY_COLOR).pack(side=tk.LEFT, padx=(0, 8))
         self.next_bet_var = tk.StringVar(value="-")
-        tk.Label(bet_row, textvariable=self.next_bet_var, bg=HEADER_BG, fg=PRIMARY_COLOR, font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
+        tk.Label(calc_frame, textvariable=self.next_bet_var, bg=HEADER_BG, fg=SECONDARY_COLOR, font=("Segoe UI", 9)).pack(side=tk.LEFT)
 
         btn_row2 = tk.Frame(mid_frame, bg=HEADER_BG)
         btn_row2.pack(fill=tk.X, padx=12, pady=(0, 12))
@@ -126,17 +131,30 @@ class MoneyApp(tk.Tk):
         hist_frame = tk.Frame(main_container, bg=HEADER_BG, relief=tk.FLAT, bd=1)
         hist_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 12))
 
-        columns = ("step", "bet_amount", "bet_pct", "result", "pnl", "balance")
-        column_names = {"step": "Step", "bet_amount": "Bet $ Amount", "bet_pct": "Bet %", "result": "Win/Loss", "pnl": "P&L ($)", "balance": "New Balance"}
+        columns = ("step", "bet_amt", "bet_pct", "pnl_amt", "pnl_pct", "status", "balance")
+        column_names = {
+            "step": "Step", 
+            "bet_amt": "Bet Amount ($)", 
+            "bet_pct": "Bet %", 
+            "pnl_amt": "P&L ($)", 
+            "pnl_pct": "P&L %",
+            "status": "Status",
+            "balance": "New Balance ($)"
+        }
         self.tree = ttk.Treeview(hist_frame, columns=columns, show="headings", height=10)
         for c in columns:
             self.tree.heading(c, text=column_names[c])
-            self.tree.column(c, width=135)
+            if c == "step":
+                self.tree.column(c, width=45)
+            elif c == "status":
+                self.tree.column(c, width=85)
+            else:
+                self.tree.column(c, width=110)
         self.tree.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
         # Configure treeview colors for wins/losses
-        self.tree.tag_configure('win', foreground=PRIMARY_COLOR)
-        self.tree.tag_configure('loss', foreground=ACCENT_COLOR)
+        self.tree.tag_configure('win', foreground=PRIMARY_COLOR, background='#1a3a1a')
+        self.tree.tag_configure('loss', foreground=ACCENT_COLOR, background='#3a1a1a')
 
         # Footer
         footer_frame = tk.Frame(main_container, bg=DARK_BG)
@@ -179,8 +197,12 @@ class MoneyApp(tk.Tk):
 
     def on_next_bet(self):
         info = self.account.get_next_bet(base_percent=self.base_percent_var.get(), multiplier=self.mult_var.get())
-        self.next_bet_var.set(f"{info['bet_amount']:.2f} ({info['bet_percent']*100:.2f}%)")
-        self.set_status(f"Next bet: ${info['bet_amount']:.2f} ({info['bet_percent']*100:.2f}%)", SECONDARY_COLOR)
+        bet_amount = info['bet_amount']
+        bet_percent = info['bet_percent']
+        # Display calculation: balance × bet% = bet amount; profit if win = +bet_amount (100%)
+        display_text = f"💰 ${bet_amount:.2f} ({bet_percent*100:.2f}%) | Win: +${bet_amount:.2f} (+100%) | Loss: -${bet_amount:.2f} (-100%)"
+        self.next_bet_var.set(display_text)
+        self.set_status(f"Next bet: ${bet_amount:.2f} at {bet_percent*100:.2f}% of ${self.account.balance:.2f}", SECONDARY_COLOR)
 
     def _record(self, win: bool):
         if self.account.current_session is None:
@@ -201,7 +223,8 @@ class MoneyApp(tk.Tk):
         try:
             step = self.account.record_result(bet_percent=bet_percent, bet_amount=bet_amount, pnl=pnl, result=("win" if win else "loss"))
             result_text = "WIN ✓" if win else "LOSS ✗"
-            self.set_status(f"Step {step.idx}: {result_text} | P&L: {step.pnl:+.2f} | Balance: {step.balance_after:.2f}", SUCCESS_COLOR if win else ACCENT_COLOR)
+            # Show detailed calculation: base balance → bet calculation → profit/loss → new balance
+            self.set_status(f"Step {step.idx}: {result_text} | Bet: ${bet_amount:.2f} ({bet_percent*100:.2f}%) | P&L: {step.pnl:+.2f} | Balance: ${step.balance_after:.2f}", SUCCESS_COLOR if win else ACCENT_COLOR)
             self.export_to_excel()  # Auto-export after each trade
         except Exception as e:
             self.set_status(f"❌ Error: {str(e)}", ACCENT_COLOR)
@@ -226,7 +249,7 @@ class MoneyApp(tk.Tk):
             ws.title = "Trading History"
 
             # Headers
-            headers = ["Step", "Bet Amount ($)", "Bet %", "Win/Loss", "P&L ($)", "New Balance"]
+            headers = ["Step", "Bet Amount ($)", "Bet %", "P&L Amount ($)", "P&L %", "Status", "New Balance ($)"]
             ws.append(headers)
 
             # Style headers
@@ -241,22 +264,27 @@ class MoneyApp(tk.Tk):
             row_num = 2
             for session in self.account.sessions:
                 for step in session.steps:
+                    gain_pct = (step.pnl / step.bet_amount * 100) if step.bet_amount > 0 else 0
+                    status = "✓ PROFIT" if step.pnl > 0 else "✗ LOSS"
                     ws.append([
                         step.idx,
                         f"{step.bet_amount:.2f}",
                         f"{step.bet_percent*100:.2f}%",
-                        step.result.upper(),
                         f"{step.pnl:+.2f}",
+                        f"{gain_pct:+.1f}%",
+                        status,
                         f"{step.balance_after:.2f}"
                     ])
-                    # Color code rows
-                    if step.result == "win":
-                        row_fill = PatternFill(start_color="27ae60", end_color="27ae60", fill_type="solid")
+                    # Color code rows: Green for profit, Red for loss
+                    if step.pnl > 0:
+                        row_fill = PatternFill(start_color="1b5e20", end_color="1b5e20", fill_type="solid")
+                        text_color = "4caf50"  # Light green text
                     else:
-                        row_fill = PatternFill(start_color="c0392b", end_color="c0392b", fill_type="solid")
+                        row_fill = PatternFill(start_color="5d1a1a", end_color="5d1a1a", fill_type="solid")
+                        text_color = "ef5350"  # Light red text
                     for cell in ws[row_num]:
                         cell.fill = row_fill
-                        cell.font = Font(color="ecf0f1")
+                        cell.font = Font(color=text_color, bold=True)
                         cell.alignment = Alignment(horizontal="center")
                     row_num += 1
 
@@ -301,8 +329,26 @@ class MoneyApp(tk.Tk):
         sess = self.account.current_session
         if sess:
             for st in sess.steps:
-                tag = 'win' if st.result == 'win' else 'loss'
-                self.tree.insert("", tk.END, values=(st.idx, f"{st.bet_amount:.2f}", f"{st.bet_percent*100:.2f}%", st.result, f"{st.pnl:.2f}", f"{st.balance_after:.2f}"), tags=(tag,))
+                # Calculate gain percentage: (pnl / bet_amount) * 100
+                gain_pct = (st.pnl / st.bet_amount * 100) if st.bet_amount > 0 else 0
+                
+                # Status: PROFIT or LOSS with emoji
+                if st.pnl > 0:
+                    status = f"✓ PROFIT"
+                    tag = 'win'
+                else:
+                    status = f"✗ LOSS"
+                    tag = 'loss'
+                
+                self.tree.insert("", tk.END, values=(
+                    st.idx, 
+                    f"${st.bet_amount:.2f}", 
+                    f"{st.bet_percent*100:.2f}%", 
+                    f"{st.pnl:+.2f}", 
+                    f"{gain_pct:+.1f}%",
+                    status,
+                    f"${st.balance_after:.2f}"
+                ), tags=(tag,))
 
 
 def main():
